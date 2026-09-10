@@ -1,0 +1,6 @@
+{
+  "name": "GitRepo Hub - Gerenciador Dinâmico de Repositórios",
+  "description": "Painel central para importar, gerenciar e executar dinamicamente aplicações a partir de repositórios Git do GitHub.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
