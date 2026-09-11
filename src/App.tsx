@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { RepositoryItem, LogEntry, RepoStatus } from './types';
+import { RepositoryItem, LogEntry, RepoStatus, RepoFile } from './types';
 import { Navbar } from './components/Navbar';
 import { RepoAddBar, AddRepoResult } from './components/RepoAddBar';
 import { Sidebar } from './components/Sidebar';
 import { AppViewer } from './components/AppViewer';
 import { DeleteConfirmModal, DeleteModalState } from './components/DeleteConfirmModal';
 import { parseGitOrWebUrl, fetchGitHubRepoDetails } from './utils/urlParser';
+import { fetchRepoContents } from './utils/githubService';
+import { createRenderahouseRepo } from './utils/repoBootstrap';
 import { FolderGit2, CheckCircle2 } from 'lucide-react';
 
 const STORAGE_KEY = 'gitrepo_hub_modules_v1';
@@ -16,16 +18,17 @@ export default function App() {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved !== null) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
     } catch {
       // ignore
     }
-    return [];
+    // Auto-seed with the user's renderahouse-max repo ready to run
+    return [createRenderahouseRepo()];
   });
 
   const [selectedRepoId, setSelectedRepoId] = useState<string>(() => {
-    return repos[0]?.id || '';
+    return repos[0]?.id || 'repo-renderahouse-max';
   });
 
   const [isImporting, setIsImporting] = useState(false);
@@ -137,7 +140,10 @@ export default function App() {
     let demoType: RepositoryItem['demoType'] = 'generic-app';
     let demoUrl = parsed.webAppUrl;
     const lower = parsed.cleanGitUrl.toLowerCase();
-    if (lower.includes('delightful-sparkle-box')) {
+    if (lower.includes('renderahouse')) {
+      demoType = 'web-app';
+      demoUrl = `https://${parsed.owner}.github.io/${parsed.repoName}/`;
+    } else if (lower.includes('delightful-sparkle-box')) {
       demoType = 'sparkle-box';
     } else if (lower.includes('jarvis')) {
       demoType = 'jarvis';
@@ -162,11 +168,43 @@ export default function App() {
       readme?: string;
     } | null = null;
 
+    let repoRealFiles: RepoFile[] = lower.includes('renderahouse')
+      ? [
+          { path: 'index.html', size: '16.5 KB', type: 'file' },
+          { path: 'editor.html', size: '30.5 KB', type: 'file' },
+          { path: '3d-preview.html', size: '18.0 KB', type: 'file' },
+          { path: 'dashboard.html', size: '10.3 KB', type: 'file' },
+          { path: 'login.html', size: '7.9 KB', type: 'file' },
+        ]
+      : [
+          { path: 'src/App.tsx', size: '3.6 KB', type: 'file' },
+          { path: 'src/main.tsx', size: '1.2 KB', type: 'file' },
+          { path: 'package.json', size: '890 B', type: 'file' },
+          { path: 'README.md', size: '1.8 KB', type: 'file' },
+        ];
+
     if (parsed.type === 'github') {
       try {
         gitHubData = await fetchGitHubRepoDetails(parsed.owner, parsed.repoName, parsed.branch);
         if (gitHubData?.homepage) {
           demoUrl = gitHubData.homepage;
+        }
+        const contents = await fetchRepoContents(parsed.owner, parsed.repoName, '', parsed.branch);
+        if (contents.length > 0) {
+          repoRealFiles = contents.map((c) => ({
+            path: c.path,
+            size: `${(c.size / 1024).toFixed(1)} KB`,
+            type: c.type,
+            sha: c.sha,
+            downloadUrl: c.download_url || undefined,
+          }));
+          const hasHtml = contents.some((c) => c.path.toLowerCase().endsWith('.html'));
+          if (hasHtml) {
+            demoType = 'web-app';
+            if (!demoUrl) {
+              demoUrl = `https://${parsed.owner}.github.io/${parsed.repoName}/`;
+            }
+          }
         }
       } catch {
         // Fallback gracefully
@@ -188,13 +226,16 @@ export default function App() {
       addedAt: 'Agora mesmo',
       description:
         gitHubData?.description ||
-        `Módulo importado de ${finalFullName}. Pronto para desenvolvimento e execução dinâmica.`,
+        (lower.includes('renderahouse')
+          ? 'Render a House MAX — Plataforma de Renders Arquitetônicos e Visualizador 3D.'
+          : `Módulo importado de ${finalFullName}. Pronto para desenvolvimento e execução dinâmica.`),
       stars: gitHubData?.stars ?? Math.floor(10 + Math.random() * 90),
       forks: gitHubData?.forks ?? Math.floor(2 + Math.random() * 20),
-      language: gitHubData?.language || 'TypeScript / React',
-      framework: 'Vite + React 19',
+      language: gitHubData?.language || (lower.includes('renderahouse') ? 'HTML / Three.js' : 'TypeScript / React'),
+      framework: lower.includes('renderahouse') ? 'HTML5 Multi-Page + Three.js' : 'Vite + React 19',
       demoType: demoType,
       demoUrl: demoUrl,
+      activePage: 'index.html',
       logs: [
         {
           id: `log-init-1`,
@@ -211,15 +252,10 @@ export default function App() {
           message: `Cloning into '/workspace/apps/${parsed.repoName}'...`,
         },
       ],
-      files: [
-        { path: 'src/App.tsx', size: '3.6 KB', type: 'file' },
-        { path: 'src/main.tsx', size: '1.2 KB', type: 'file' },
-        { path: 'package.json', size: '890 B', type: 'file' },
-        { path: 'README.md', size: '1.8 KB', type: 'file' },
-      ],
+      files: repoRealFiles,
       readmePreview:
         gitHubData?.readme ||
-        `# ${finalName}\n\n${gitHubData?.description || 'Repositório clonado com sucesso através do painel dinâmico GitRepo Hub.'}\n\n### Origem do Código:\n\`${parsed.cleanGitUrl}\`\n\n### Status de Execução:\nInicializado no runtime Vite com porta virtual :${newPort}.`,
+        `# ${finalName}\n\n${gitHubData?.description || 'Repositório clonado com sucesso através do painel dinâmico GitRepo Hub.'}\n\n### Origem do Código:\n\`${parsed.cleanGitUrl}\`\n\n### Status de Execução:\nInicializado no runtime Vite com porta virtual :${newPort}. Use a Aba de Prompt IA para alterar qualquer arquivo e gravar commits no GitHub.`,
     };
 
     // Add to list and select it immediately
@@ -386,6 +422,36 @@ export default function App() {
     }, 200);
   };
 
+  const handleUpdateFileCode = (
+    repoId: string,
+    filePath: string,
+    newCode: string,
+    newSha?: string
+  ) => {
+    setRepos((prev) =>
+      prev.map((r) => {
+        if (r.id !== repoId) return r;
+        const currentCached = r.cachedFiles || {};
+        return {
+          ...r,
+          cachedFiles: {
+            ...currentCached,
+            [filePath]: {
+              content: newCode,
+              sha: newSha || currentCached[filePath]?.sha,
+              isModified: true,
+            },
+          },
+          files: r.files.map((f) =>
+            f.path === filePath
+              ? { ...f, content: newCode, sha: newSha || f.sha, isModified: true }
+              : f
+          ),
+        };
+      })
+    );
+  };
+
   const runningCount = repos.filter((r) => r.status === 'running').length;
 
   return (
@@ -434,6 +500,8 @@ export default function App() {
             onClearLogs={() => handleClearLogs(selectedRepo.id)}
             onExecuteCommand={(cmd) => handleExecuteCommand(selectedRepo.id, cmd)}
             onRequestDelete={() => setDeleteModal({ isOpen: true, type: 'single', repo: selectedRepo })}
+            onUpdateFileCode={handleUpdateFileCode}
+            onAppendLog={appendLog}
           />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-slate-50 dark:bg-slate-950">

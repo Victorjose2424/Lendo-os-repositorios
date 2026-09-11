@@ -17,6 +17,10 @@ import {
   RefreshCw,
   FolderGit2,
   Trash2,
+  Sparkles,
+  MessageSquare,
+  Columns,
+  Flame,
 } from 'lucide-react';
 import { SparkleBoxApp } from './EmbeddedApps/SparkleBoxApp';
 import { JarvisApp } from './EmbeddedApps/JarvisApp';
@@ -24,6 +28,9 @@ import { Game2048App } from './EmbeddedApps/Game2048App';
 import { MarkdownNotesApp } from './EmbeddedApps/MarkdownNotesApp';
 import { GenericAppSandbox } from './EmbeddedApps/GenericAppSandbox';
 import { IframeAppViewer } from './EmbeddedApps/IframeAppViewer';
+import { WebAppRunner } from './EmbeddedApps/WebAppRunner';
+import { PromptEditorTab } from './PromptEditor/PromptEditorTab';
+import { RepoCopilotChat } from './RepoChat/RepoCopilotChat';
 import { TerminalLogs } from './TerminalLogs';
 
 interface AppViewerProps {
@@ -34,6 +41,8 @@ interface AppViewerProps {
   onClearLogs: () => void;
   onExecuteCommand: (cmd: string) => void;
   onRequestDelete: () => void;
+  onUpdateFileCode?: (repoId: string, filePath: string, newCode: string, newSha?: string) => void;
+  onAppendLog?: (repoId: string, message: string, level?: 'info' | 'warn' | 'error' | 'success' | 'cmd', tag?: 'git' | 'npm' | 'vite' | 'system' | 'runtime') => void;
 }
 
 export const AppViewer: React.FC<AppViewerProps> = ({
@@ -44,8 +53,11 @@ export const AppViewer: React.FC<AppViewerProps> = ({
   onClearLogs,
   onExecuteCommand,
   onRequestDelete,
+  onUpdateFileCode,
+  onAppendLog,
 }) => {
-  const [activeTab, setActiveTab] = useState<'preview' | 'terminal' | 'readme'>('preview');
+  const [activeTab, setActiveTab] = useState<'preview' | 'chat' | 'prompt' | 'terminal' | 'readme'>('preview');
+  const [isSplitView, setIsSplitView] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -63,13 +75,36 @@ export const AppViewer: React.FC<AppViewerProps> = ({
         return <Game2048App key={reloadKey} />;
       case 'markdown-notes':
         return <MarkdownNotesApp key={reloadKey} />;
+      case 'web-app':
+        return (
+          <WebAppRunner
+            repo={repo}
+            onOpenPromptTab={() => setActiveTab('prompt')}
+            onOpenChatTab={() => setActiveTab('chat')}
+            key={reloadKey}
+          />
+        );
       case 'custom-iframe':
         return <IframeAppViewer url={repo.demoUrl || `http://localhost:${repo.port}`} repoName={repo.name} key={reloadKey} />;
-      default:
+      default: {
+        const hasHtmlFiles =
+          repo.files?.some((f) => f.path.toLowerCase().endsWith('.html')) ||
+          repo.language?.toLowerCase().includes('html');
+        if (hasHtmlFiles || repo.fullName.toLowerCase().includes('renderahouse')) {
+          return (
+            <WebAppRunner
+              repo={repo}
+              onOpenPromptTab={() => setActiveTab('prompt')}
+              onOpenChatTab={() => setActiveTab('chat')}
+              key={reloadKey}
+            />
+          );
+        }
         if (repo.demoUrl) {
           return <IframeAppViewer url={repo.demoUrl} repoName={repo.name} key={reloadKey} />;
         }
         return <GenericAppSandbox repo={repo} onRestart={onRestart} key={reloadKey} />;
+      }
     }
   };
 
@@ -144,9 +179,12 @@ export const AppViewer: React.FC<AppViewerProps> = ({
           <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs">
             <button
               type="button"
-              onClick={() => setActiveTab('preview')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md font-medium transition-colors ${
-                activeTab === 'preview'
+              onClick={() => {
+                setActiveTab('preview');
+                setIsSplitView(false);
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer ${
+                activeTab === 'preview' && !isSplitView
                   ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
               }`}
@@ -155,24 +193,51 @@ export const AppViewer: React.FC<AppViewerProps> = ({
               <span>Aplicação</span>
             </button>
 
+            {/* Chat Copilot Tab */}
             <button
               type="button"
-              onClick={() => setActiveTab('terminal')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md font-medium transition-colors ${
-                activeTab === 'terminal'
+              onClick={() => {
+                setActiveTab('chat');
+                setIsSplitView(false);
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md font-bold transition-colors cursor-pointer ${
+                activeTab === 'chat' && !isSplitView
+                  ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-xs'
+                  : 'text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 font-semibold'
+              }`}
+              title="Chat interativo para melhorar e aplicar alterações no repositório clonado"
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              <span>Chat de Melhorias</span>
+              <span className="text-[9px] px-1 py-0.2 rounded bg-amber-400 text-slate-900 font-extrabold uppercase">
+                IA
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('terminal');
+                setIsSplitView(false);
+              }}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md font-medium transition-colors cursor-pointer ${
+                activeTab === 'terminal' && !isSplitView
                   ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
               }`}
             >
               <Terminal className="w-3.5 h-3.5" />
-              <span>Terminal ({repo.logs.length})</span>
+              <span className="hidden sm:inline">Logs</span>
             </button>
 
             <button
               type="button"
-              onClick={() => setActiveTab('readme')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md font-medium transition-colors ${
-                activeTab === 'readme'
+              onClick={() => {
+                setActiveTab('readme');
+                setIsSplitView(false);
+              }}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md font-medium transition-colors cursor-pointer ${
+                activeTab === 'readme' && !isSplitView
                   ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
               }`}
@@ -182,12 +247,27 @@ export const AppViewer: React.FC<AppViewerProps> = ({
             </button>
           </div>
 
+          {/* Split View Toggle */}
+          <button
+            type="button"
+            onClick={() => setIsSplitView(!isSplitView)}
+            title={isSplitView ? 'Voltar para aba individual' : 'Ativar Split View (Aplicação + Chat lado a lado)'}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-colors cursor-pointer ${
+              isSplitView
+                ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
+            }`}
+          >
+            <Columns className="w-3.5 h-3.5" />
+            <span className="hidden md:inline">Dividir Tela (App + Chat)</span>
+          </button>
+
           {/* Quick utility buttons */}
           <button
             type="button"
             onClick={handleRefreshApp}
             title="Recarregar tela da aplicação"
-            className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
           >
             <RefreshCw className="w-4 h-4" />
           </button>
@@ -225,137 +305,231 @@ export const AppViewer: React.FC<AppViewerProps> = ({
 
       {/* Main Content Area based on Tab & Status */}
       <div className="flex-1 relative overflow-hidden bg-slate-50 dark:bg-slate-950">
-        {activeTab === 'preview' && (
+        {/* Split View Mode: App on Left, Chat on Right */}
+        {isSplitView ? (
+          <div className="w-full h-full flex flex-col lg:flex-row overflow-hidden">
+            {/* Left: App Preview */}
+            <div className="w-full lg:w-1/2 h-1/2 lg:h-full border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-800 flex flex-col relative overflow-hidden">
+              <div className="px-3 py-1.5 bg-slate-100 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 text-[11px] font-semibold text-slate-600 dark:text-slate-400 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5 text-indigo-500" />
+                  Aplicação em Execução Ao Vivo
+                </span>
+                <button
+                  type="button"
+                  onClick={handleRefreshApp}
+                  className="flex items-center gap-1 text-slate-500 hover:text-indigo-600 cursor-pointer"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  <span>Recarregar</span>
+                </button>
+              </div>
+              <div className="flex-1 relative overflow-hidden">
+                {repo.status === 'running' ? renderActiveApp() : (
+                  <div className="w-full h-full flex items-center justify-center p-4 text-center">
+                    <p className="text-xs text-slate-500">Inicie o servidor para ver o aplicativo em tempo real.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Right: Copilot Chat */}
+            <div className="w-full lg:w-1/2 h-1/2 lg:h-full flex flex-col overflow-hidden">
+              <RepoCopilotChat
+                repo={repo}
+                onUpdateFileCode={(filePath, newCode, newSha) => {
+                  if (onUpdateFileCode) {
+                    onUpdateFileCode(repo.id, filePath, newCode, newSha);
+                  }
+                  // Trigger reload of the left preview
+                  handleRefreshApp();
+                }}
+                onNavigateToPreview={() => {
+                  handleRefreshApp();
+                }}
+                onAppendLog={(msg, lvl, tg) => {
+                  if (onAppendLog) {
+                    onAppendLog(repo.id, msg, lvl, tg);
+                  }
+                }}
+                onOpenSplitView={() => setIsSplitView(false)}
+                isSplitViewActive={true}
+              />
+            </div>
+          </div>
+        ) : (
           <>
-            {repo.status === 'running' && renderActiveApp()}
+            {activeTab === 'preview' && (
+              <>
+                {repo.status === 'running' && renderActiveApp()}
 
-            {(repo.status === 'cloning' || repo.status === 'building') && (
-              <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center">
-                <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center mb-4">
-                  <div className="w-8 h-8 border-3 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-                </div>
-                <h3 className="text-base font-bold text-slate-800 dark:text-slate-200">
-                  Clonando e Construindo {repo.name}...
-                </h3>
-                <p className="text-xs text-slate-500 max-w-sm mt-1 mb-4">
-                  Sincronizando árvore de objetos Git, resolvendo dependências npm e alocando porta virtual.
-                </p>
-                <div className="w-full max-w-md bg-slate-200 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
-                  <div className="bg-indigo-600 h-full w-[70%] animate-pulse" />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('terminal')}
-                  className="mt-6 text-xs text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
-                >
-                  <Terminal className="w-3.5 h-3.5" />
-                  <span>Acompanhar logs no terminal em tempo real</span>
-                </button>
-              </div>
+                {(repo.status === 'cloning' || repo.status === 'building') && (
+                  <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center">
+                    <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center mb-4">
+                      <div className="w-8 h-8 border-3 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                    </div>
+                    <h3 className="text-base font-bold text-slate-800 dark:text-slate-200">
+                      Clonando e Construindo {repo.name}...
+                    </h3>
+                    <p className="text-xs text-slate-500 max-w-sm mt-1 mb-4">
+                      Sincronizando árvore de objetos Git, resolvendo dependências npm e alocando porta virtual.
+                    </p>
+                    <div className="w-full max-w-md bg-slate-200 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
+                      <div className="bg-indigo-600 h-full w-[70%] animate-pulse" />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('terminal')}
+                      className="mt-6 text-xs text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
+                    >
+                      <Terminal className="w-3.5 h-3.5" />
+                      <span>Acompanhar logs no terminal em tempo real</span>
+                    </button>
+                  </div>
+                )}
+
+                {repo.status === 'stopped' && (
+                  <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center">
+                    <div className="w-14 h-14 rounded-2xl bg-slate-200 dark:bg-slate-800 flex items-center justify-center mb-4 text-slate-400">
+                      <Square className="w-6 h-6 fill-current" />
+                    </div>
+                    <h3 className="text-base font-bold text-slate-800 dark:text-slate-200">
+                      Módulo Parado
+                    </h3>
+                    <p className="text-xs text-slate-500 max-w-xs mt-1 mb-6">
+                      O servidor na porta <span className="font-mono font-semibold">:{repo.port}</span> foi interrompido. Clique no botão abaixo para reativar.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={onStart}
+                      className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-lg shadow-sm transition-all cursor-pointer"
+                    >
+                      <Play className="w-4 h-4 fill-current" />
+                      <span>Iniciar Servidor Dinâmico</span>
+                    </button>
+                  </div>
+                )}
+
+                {repo.status === 'error' && (
+                  <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center">
+                    <div className="w-14 h-14 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center mb-4 text-rose-500">
+                      <AlertTriangle className="w-6 h-6" />
+                    </div>
+                    <h3 className="text-base font-bold text-slate-800 dark:text-slate-200">
+                      Falha ao Executar o Repositório
+                    </h3>
+                    <p className="text-xs text-slate-500 max-w-sm mt-1 mb-6">
+                      Ocorreu um erro durante a compilação ou execução do código. Verifique a aba de logs para diagnosticar o problema.
+                    </p>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={onRestart}
+                        className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>Tentar Novamente</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('terminal')}
+                        className="flex items-center gap-1.5 px-4 py-2 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-medium rounded-lg"
+                      >
+                        <Terminal className="w-3.5 h-3.5" />
+                        <span>Ver Logs de Erro</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
 
-            {repo.status === 'stopped' && (
-              <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center">
-                <div className="w-14 h-14 rounded-2xl bg-slate-200 dark:bg-slate-800 flex items-center justify-center mb-4 text-slate-400">
-                  <Square className="w-6 h-6 fill-current" />
-                </div>
-                <h3 className="text-base font-bold text-slate-800 dark:text-slate-200">
-                  Módulo Parado
-                </h3>
-                <p className="text-xs text-slate-500 max-w-xs mt-1 mb-6">
-                  O servidor na porta <span className="font-mono font-semibold">:{repo.port}</span> foi interrompido. Clique no botão abaixo para reativar.
-                </p>
-                <button
-                  type="button"
-                  onClick={onStart}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-lg shadow-sm transition-all cursor-pointer"
-                >
-                  <Play className="w-4 h-4 fill-current" />
-                  <span>Iniciar Servidor Dinâmico</span>
-                </button>
-              </div>
+            {/* Chat Copilot Tab (Full Width) */}
+            {activeTab === 'chat' && (
+              <RepoCopilotChat
+                repo={repo}
+                onUpdateFileCode={(filePath, newCode, newSha) => {
+                  if (onUpdateFileCode) {
+                    onUpdateFileCode(repo.id, filePath, newCode, newSha);
+                  }
+                  handleRefreshApp();
+                }}
+                onNavigateToPreview={() => setActiveTab('preview')}
+                onAppendLog={(msg, lvl, tg) => {
+                  if (onAppendLog) {
+                    onAppendLog(repo.id, msg, lvl, tg);
+                  }
+                }}
+                onOpenSplitView={() => setIsSplitView(true)}
+                isSplitViewActive={false}
+              />
             )}
 
-            {repo.status === 'error' && (
-              <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center">
-                <div className="w-14 h-14 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center mb-4 text-rose-500">
-                  <AlertTriangle className="w-6 h-6" />
-                </div>
-                <h3 className="text-base font-bold text-slate-800 dark:text-slate-200">
-                  Falha ao Executar o Repositório
-                </h3>
-                <p className="text-xs text-slate-500 max-w-sm mt-1 mb-6">
-                  Ocorreu um erro durante a compilação ou execução do código. Verifique a aba de logs para diagnosticar o problema.
-                </p>
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={onRestart}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    <span>Tentar Novamente</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('terminal')}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-medium rounded-lg"
-                  >
-                    <Terminal className="w-3.5 h-3.5" />
-                    <span>Ver Logs de Erro</span>
-                  </button>
+            {activeTab === 'prompt' && (
+              <PromptEditorTab
+                repo={repo}
+                onUpdateFileCode={(filePath, newCode, newSha) => {
+                  if (onUpdateFileCode) {
+                    onUpdateFileCode(repo.id, filePath, newCode, newSha);
+                  }
+                }}
+                onNavigateToPreview={() => setActiveTab('preview')}
+                onAppendLog={(msg, lvl, tg) => {
+                  if (onAppendLog) {
+                    onAppendLog(repo.id, msg, lvl, tg);
+                  }
+                }}
+              />
+            )}
+
+            {activeTab === 'terminal' && (
+              <TerminalLogs
+                logs={repo.logs}
+                repoName={repo.name}
+                onClearLogs={onClearLogs}
+                onExecuteCommand={onExecuteCommand}
+              />
+            )}
+
+            {activeTab === 'readme' && (
+              <div className="w-full h-full overflow-y-auto p-6 max-w-4xl mx-auto">
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-xs">
+                  <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-200 dark:border-slate-800 text-xs">
+                    <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400 font-mono">
+                      <BookOpen className="w-4 h-4 text-indigo-500" />
+                      <span>README.md — {repo.branch}</span>
+                    </div>
+                    <span className="text-slate-400 font-mono text-[11px]">UTF-8 Markdown</span>
+                  </div>
+
+                  <div className="prose dark:prose-invert max-w-none text-slate-800 dark:text-slate-200 text-xs sm:text-sm leading-relaxed whitespace-pre-line font-sans">
+                    {repo.readmePreview || '# Sem README fornecido para este repositório.'}
+                  </div>
+
+                  {/* Files section */}
+                  {repo.files && repo.files.length > 0 && (
+                    <div className="mt-8 pt-6 border-t border-slate-200 dark:border-slate-800">
+                      <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 mb-3 flex items-center gap-1.5 uppercase tracking-wider">
+                        <FileCode className="w-3.5 h-3.5 text-indigo-500" />
+                        <span>Estrutura de Arquivos Detectada</span>
+                      </h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-mono">
+                        {repo.files.map((file, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-center justify-between p-2 rounded bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 text-slate-700 dark:text-slate-300"
+                          >
+                            <span className="truncate">{file.path}</span>
+                            <span className="text-slate-400 text-[11px] shrink-0 ml-2">{file.size}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
           </>
-        )}
-
-        {activeTab === 'terminal' && (
-          <TerminalLogs
-            logs={repo.logs}
-            repoName={repo.name}
-            onClearLogs={onClearLogs}
-            onExecuteCommand={onExecuteCommand}
-          />
-        )}
-
-        {activeTab === 'readme' && (
-          <div className="w-full h-full overflow-y-auto p-6 max-w-4xl mx-auto">
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-xs">
-              <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-200 dark:border-slate-800 text-xs">
-                <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400 font-mono">
-                  <BookOpen className="w-4 h-4 text-indigo-500" />
-                  <span>README.md — {repo.branch}</span>
-                </div>
-                <span className="text-slate-400 font-mono text-[11px]">UTF-8 Markdown</span>
-              </div>
-
-              <div className="prose dark:prose-invert max-w-none text-slate-800 dark:text-slate-200 text-xs sm:text-sm leading-relaxed whitespace-pre-line font-sans">
-                {repo.readmePreview || '# Sem README fornecido para este repositório.'}
-              </div>
-
-              {/* Files section */}
-              {repo.files && repo.files.length > 0 && (
-                <div className="mt-8 pt-6 border-t border-slate-200 dark:border-slate-800">
-                  <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 mb-3 flex items-center gap-1.5 uppercase tracking-wider">
-                    <FileCode className="w-3.5 h-3.5 text-indigo-500" />
-                    <span>Estrutura de Arquivos Detectada</span>
-                  </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-mono">
-                    {repo.files.map((file, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-center justify-between p-2 rounded bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 text-slate-700 dark:text-slate-300"
-                      >
-                        <span className="truncate">{file.path}</span>
-                        <span className="text-slate-400 text-[11px] shrink-0 ml-2">{file.size}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
         )}
       </div>
     </main>
