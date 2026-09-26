@@ -112,7 +112,8 @@ export const WebAppRunner: React.FC<WebAppRunnerProps> = ({
       }
 
       // 3. Check preloaded static files for renderahouse-max
-      if (RENDERAHOUSE_FILES[activePage]) {
+      const isRenderahouse = repo.fullName.toLowerCase().includes('renderahouse');
+      if (isRenderahouse && RENDERAHOUSE_FILES[activePage]) {
         if (!isCancelled) {
           setPageHtml(RENDERAHOUSE_FILES[activePage]);
           setIsLoading(false);
@@ -131,15 +132,15 @@ export const WebAppRunner: React.FC<WebAppRunnerProps> = ({
         if (!isCancelled) {
           if (res.content) {
             setPageHtml(res.content);
-          } else if (RENDERAHOUSE_FILES['index.html']) {
+          } else if (isRenderahouse && RENDERAHOUSE_FILES['index.html']) {
             setPageHtml(RENDERAHOUSE_FILES['index.html']);
           } else {
-            setLoadError(`Arquivo ${activePage} não encontrado.`);
+            setLoadError(`Arquivo ${activePage} não encontrado no repositório.`);
           }
         }
       } catch (err: any) {
         if (!isCancelled) {
-          if (RENDERAHOUSE_FILES[activePage]) {
+          if (isRenderahouse && RENDERAHOUSE_FILES[activePage]) {
             setPageHtml(RENDERAHOUSE_FILES[activePage]);
           } else {
             setLoadError(`Não foi possível carregar ${activePage}: ${err?.message}`);

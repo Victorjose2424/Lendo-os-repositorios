@@ -56,6 +56,203 @@ app.get('/api/proxy-github-file', async (req, res) => {
   }
 });
 
+// Polsia Agent Dispatch endpoint (calls Gemini to execute autonomous agent orders)
+app.post('/api/polsia-agent-dispatch', async (req, res) => {
+  try {
+    const { agentName, agentRole, instruction, companyName, mrr } = req.body;
+
+    if (!instruction || typeof instruction !== 'string') {
+      res.status(400).json({ error: 'A instrução para o agente é obrigatória.' });
+      return;
+    }
+
+    const ai = getGeminiClient();
+
+    const systemInstruction = `Você é o agente autônomo "${agentName || 'Atlas'}" da plataforma Polsia AI (Autonomous AI Operating System).
+Sua função na empresa "${companyName || 'SaaS Venture'}": "${agentRole || 'Autonomous Agent'}".
+A empresa tem MRR atual de $${mrr || 18940} e opera 24/7 sem intervenção manual.
+Você deve planejar e executar a instrução solicitada com alto rigor técnico e foco em resultados concretos.
+
+Responda em JSON estrito com o esquema:
+{
+  "agent": "${agentName || 'Atlas'}",
+  "actionTitle": "título curto e impactante da ação executada",
+  "thinking": "raciocínio analítico e estratégico do agente explicando a abordagem adotada",
+  "toolCalls": ["Ferramenta1", "Ferramenta2"],
+  "output": "entregável completo gerado (código fonte funcional, template de cold email, plano estratégico com OKRs, ou relatório financeiro)"
+}
+IMPORTANTE: Retorne APENAS o JSON válido sem blocos markdown adicionais em volta.`;
+
+    const userPrompt = `INSTRUÇÃO DA LIDERANÇA / USUÁRIO:
+${instruction}
+
+Por favor, execute a tarefa e gere o entregável correspondente com nível de excelência profissional.`;
+
+    const CANDIDATE_MODELS = [
+      'gemini-3.8-flash',
+      'gemini-3.1-flash-lite',
+      'gemini-3.1-pro-preview',
+    ];
+
+    let responseText = '';
+    let lastError: any = null;
+
+    for (const modelName of CANDIDATE_MODELS) {
+      try {
+        const response = await ai.models.generateContent({
+          model: modelName,
+          contents: userPrompt,
+          config: {
+            systemInstruction,
+            responseMimeType: 'application/json',
+          },
+        });
+        if (response.text) {
+          responseText = response.text;
+          break;
+        }
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`Polsia dispatch attempt with ${modelName} failed:`, err?.message);
+      }
+    }
+
+    if (!responseText) {
+      throw lastError || new Error('Não foi possível processar a ordem do agente.');
+    }
+
+    let parsedResult;
+    try {
+      parsedResult = JSON.parse(responseText);
+    } catch {
+      const match = responseText.match(/\{[\s\S]*\}/);
+      if (match) {
+        parsedResult = JSON.parse(match[0]);
+      } else {
+        throw new Error('Falha ao interpretar resposta estruturada do agente.');
+      }
+    }
+
+    res.json(parsedResult);
+  } catch (error: any) {
+    console.error('Erro na API /api/polsia-agent-dispatch:', error);
+    res.status(500).json({
+      error: error?.message || 'Erro ao processar despacho do agente.',
+    });
+  }
+});
+
+// Synthesize Real Functional Interactive App for ANY imported repository
+app.post('/api/synthesize-app', async (req, res) => {
+  try {
+    const { repoName, fullName, description, readme, language, files } = req.body;
+
+    if (!repoName) {
+      res.status(400).json({ error: 'Nome do repositório é obrigatório.' });
+      return;
+    }
+
+    const ai = getGeminiClient();
+
+    const filesStr = Array.isArray(files)
+      ? files.slice(0, 20).map((f: any) => `- ${f.path || f.name} (${f.size || 'file'})`).join('\n')
+      : 'N/A';
+
+    const readmeExcerpt = typeof readme === 'string' ? readme.slice(0, 3000) : '';
+
+    const systemInstruction = `Você é um Engenheiro de Software Sênior e Arquiteto Full-Stack.
+O usuário importou o repositório do GitHub "${fullName || repoName}" (${language || 'Web'}).
+Descrição: "${description || 'Repositório de software'}"
+Seu objetivo é gerar um APLICATIVO WEB INTERATIVO, COMPLETO E FUNCIONAL em um único arquivo HTML (HTML5 + CSS Tailwind + JavaScript vanilla moderno) que replique com perfeição e autenticidade as funcionalidades, interface, fluxo e propósito deste repositório!
+
+Regras Cruciais:
+1. O HTML deve ser 100% autônomo e executável dentro de um iframe.
+2. Inclua o script CDN do Tailwind CSS: <script src="https://cdn.tailwindcss.com"></script>
+3. Crie uma interface rica, profissional e interativa, com formulários, botões que realmente alteram o estado da tela, painéis dinâmicos, gráficos simulados ou tabelas com dados interativos.
+4. Se o repositório for uma ferramenta, CLI ou IA (como agentes, APIs, geradores, utilitários), forneça entradas reais para o usuário testar e ver os resultados operando na hora.
+5. Se for um jogo, faça o jogo jogável com teclas e controles na tela.
+6. Se for um dashboard, monte o painel com filtros e interações que respondem aos cliques.
+7. Não crie placeholders estáticos ou páginas vazias. Forneça uma experiência interativa deslumbrante e de ponta a ponta.
+
+Formato de resposta JSON estrito:
+{
+  "title": "Título conciso da aplicação",
+  "summary": "Resumo do que a aplicação faz e como opera",
+  "html": "<!DOCTYPE html><html>...</html>"
+}`;
+
+    const userPrompt = `REPOSITÓRIO: ${fullName || repoName}
+LINGUAGEM: ${language}
+DESCRIÇÃO: ${description}
+
+ARQUIVOS DO REPOSITÓRIO:
+${filesStr}
+
+EXCERTO DO README:
+${readmeExcerpt}
+
+Por favor, gere o código HTML completo da aplicação interativa para este repositório.`;
+
+    const CANDIDATE_MODELS = [
+      'gemini-3.8-flash',
+      'gemini-3.1-flash-lite',
+      'gemini-3.1-pro-preview',
+    ];
+
+    let responseText = '';
+    let lastError: any = null;
+
+    for (const modelName of CANDIDATE_MODELS) {
+      try {
+        const response = await ai.models.generateContent({
+          model: modelName,
+          contents: userPrompt,
+          config: {
+            systemInstruction,
+            responseMimeType: 'application/json',
+          },
+        });
+        if (response.text) {
+          responseText = response.text;
+          break;
+        }
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`Synthesize app attempt with ${modelName} failed:`, err?.message);
+      }
+    }
+
+    if (!responseText) {
+      throw lastError || new Error('Não foi possível sintetizar a aplicação para este repositório.');
+    }
+
+    let parsedResult;
+    try {
+      parsedResult = JSON.parse(responseText);
+    } catch {
+      const match = responseText.match(/\{[\s\S]*\}/);
+      if (match) {
+        parsedResult = JSON.parse(match[0]);
+      } else {
+        throw new Error('Falha ao interpretar JSON retornado pela IA.');
+      }
+    }
+
+    res.json({
+      success: true,
+      title: parsedResult.title || repoName,
+      summary: parsedResult.summary || 'Aplicação sintetizada com sucesso.',
+      html: parsedResult.html || '',
+    });
+  } catch (error: any) {
+    console.error('Erro na API /api/synthesize-app:', error);
+    res.status(500).json({
+      error: error?.message || 'Erro ao sintetizar aplicação para o repositório.',
+    });
+  }
+});
+
+
 // AI Prompt Edit endpoint
 app.post('/api/prompt-edit', async (req, res) => {
   try {

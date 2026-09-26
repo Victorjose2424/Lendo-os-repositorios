@@ -49,8 +49,9 @@ export interface RepositoryItem {
   forks: number;
   language: string;
   framework?: string;
-  demoType: 'sparkle-box' | 'jarvis' | 'game-2048' | 'markdown-notes' | 'custom-iframe' | 'web-app' | 'generic-app';
+  demoType: 'sparkle-box' | 'jarvis' | 'game-2048' | 'markdown-notes' | 'custom-iframe' | 'web-app' | 'generic-app' | 'polsia';
   demoUrl?: string;
+  isSynthesized?: boolean;
   logs: LogEntry[];
   files: RepoFile[];
   readmePreview: string;

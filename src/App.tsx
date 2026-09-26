@@ -7,10 +7,10 @@ import { AppViewer } from './components/AppViewer';
 import { DeleteConfirmModal, DeleteModalState } from './components/DeleteConfirmModal';
 import { parseGitOrWebUrl, fetchGitHubRepoDetails } from './utils/urlParser';
 import { fetchRepoContents } from './utils/githubService';
-import { createRenderahouseRepo } from './utils/repoBootstrap';
+import { createRenderahouseRepo, createPolsiaRepo } from './utils/repoBootstrap';
 import { FolderGit2, CheckCircle2 } from 'lucide-react';
 
-const STORAGE_KEY = 'gitrepo_hub_modules_v1';
+const STORAGE_KEY = 'gitrepo_hub_modules_v2';
 
 export default function App() {
   const [repos, setRepos] = useState<RepositoryItem[]>(() => {
@@ -23,12 +23,12 @@ export default function App() {
     } catch {
       // ignore
     }
-    // Auto-seed with the user's renderahouse-max repo ready to run
-    return [createRenderahouseRepo()];
+    // Auto-seed with Polsia AI and Renderahouse ready to run
+    return [createPolsiaRepo(), createRenderahouseRepo()];
   });
 
   const [selectedRepoId, setSelectedRepoId] = useState<string>(() => {
-    return repos[0]?.id || 'repo-renderahouse-max';
+    return repos[0]?.id || 'repo-polsia-ai';
   });
 
   const [isImporting, setIsImporting] = useState(false);
@@ -140,7 +140,9 @@ export default function App() {
     let demoType: RepositoryItem['demoType'] = 'generic-app';
     let demoUrl = parsed.webAppUrl;
     const lower = parsed.cleanGitUrl.toLowerCase();
-    if (lower.includes('renderahouse')) {
+    if (lower.includes('polsia')) {
+      demoType = 'polsia';
+    } else if (lower.includes('renderahouse')) {
       demoType = 'web-app';
       demoUrl = `https://${parsed.owner}.github.io/${parsed.repoName}/`;
     } else if (lower.includes('delightful-sparkle-box')) {
@@ -168,7 +170,17 @@ export default function App() {
       readme?: string;
     } | null = null;
 
-    let repoRealFiles: RepoFile[] = lower.includes('renderahouse')
+    let repoRealFiles: RepoFile[] = lower.includes('polsia')
+      ? [
+          { path: 'polsia.config.ts', size: '2.4 KB', type: 'file' },
+          { path: 'src/agents/ceo_atlas.ts', size: '4.8 KB', type: 'file' },
+          { path: 'src/agents/engineer_forge.ts', size: '6.2 KB', type: 'file' },
+          { path: 'src/agents/marketing_echo.ts', size: '5.1 KB', type: 'file' },
+          { path: 'src/agents/sales_nexus.ts', size: '4.2 KB', type: 'file' },
+          { path: 'src/agents/finance_ledger.ts', size: '3.9 KB', type: 'file' },
+          { path: 'README.md', size: '3.4 KB', type: 'file' },
+        ]
+      : lower.includes('renderahouse')
       ? [
           { path: 'index.html', size: '16.5 KB', type: 'file' },
           { path: 'editor.html', size: '30.5 KB', type: 'file' },
@@ -214,6 +226,8 @@ export default function App() {
     const finalName = gitHubData?.name || parsed.repoName;
     const finalFullName = gitHubData?.fullName || parsed.fullName;
 
+    const polsiaTemplate = lower.includes('polsia') ? createPolsiaRepo() : null;
+
     const newRepo: RepositoryItem = {
       id: newRepoId,
       name: finalName,
@@ -226,16 +240,29 @@ export default function App() {
       addedAt: 'Agora mesmo',
       description:
         gitHubData?.description ||
-        (lower.includes('renderahouse')
+        (lower.includes('polsia')
+          ? 'Polsia — Plataforma autônoma de IA que opera empresas inteiras 24/7 sem funcionários humanos (Agentes Atlas, Forge, Echo, Nexus, Ledger).'
+          : lower.includes('renderahouse')
           ? 'Render a House MAX — Plataforma de Renders Arquitetônicos e Visualizador 3D.'
           : `Módulo importado de ${finalFullName}. Pronto para desenvolvimento e execução dinâmica.`),
-      stars: gitHubData?.stars ?? Math.floor(10 + Math.random() * 90),
-      forks: gitHubData?.forks ?? Math.floor(2 + Math.random() * 20),
-      language: gitHubData?.language || (lower.includes('renderahouse') ? 'HTML / Three.js' : 'TypeScript / React'),
-      framework: lower.includes('renderahouse') ? 'HTML5 Multi-Page + Three.js' : 'Vite + React 19',
+      stars: gitHubData?.stars ?? (lower.includes('polsia') ? 1840 : Math.floor(10 + Math.random() * 90)),
+      forks: gitHubData?.forks ?? (lower.includes('polsia') ? 342 : Math.floor(2 + Math.random() * 20)),
+      language:
+        gitHubData?.language ||
+        (lower.includes('polsia')
+          ? 'TypeScript / Claude CLI'
+          : lower.includes('renderahouse')
+          ? 'HTML / Three.js'
+          : 'TypeScript / React'),
+      framework: lower.includes('polsia')
+        ? 'Polsia Multi-Agent Autonomous OS'
+        : lower.includes('renderahouse')
+        ? 'HTML5 Multi-Page + Three.js'
+        : 'Vite + React 19',
       demoType: demoType,
       demoUrl: demoUrl,
-      activePage: 'index.html',
+      activePage: lower.includes('polsia') ? 'polsia.config.ts' : 'index.html',
+      cachedFiles: polsiaTemplate ? polsiaTemplate.cachedFiles : undefined,
       logs: [
         {
           id: `log-init-1`,

@@ -215,6 +215,41 @@ export const RepoAddBar: React.FC<RepoAddBarProps> = ({ onAddRepo, isImporting }
           </button>
         </div>
       )}
+
+      {/* Quick Suggestion Pills */}
+      <div className="flex items-center gap-1.5 mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/80 text-[11px] overflow-x-auto text-slate-500">
+        <span className="font-semibold text-slate-400 shrink-0">Sugestões rápidas:</span>
+        <button
+          type="button"
+          onClick={() => {
+            setInputUrl('https://github.com/PolsiaAI/Polsia.git');
+            setErrorMsg(null);
+          }}
+          className="px-2.5 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 font-medium shrink-0 transition-colors flex items-center gap-1 cursor-pointer"
+        >
+          <span>🚀 Polsia AI (Autonomous Co-Founder)</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setInputUrl('https://github.com/victormigueladrianojose-hash/renderahouse-max.git');
+            setErrorMsg(null);
+          }}
+          className="px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 shrink-0 transition-colors cursor-pointer"
+        >
+          <span>🏠 Render a House MAX</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setInputUrl('https://github.com/gabrielecirulli/2048.git');
+            setErrorMsg(null);
+          }}
+          className="px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 shrink-0 transition-colors cursor-pointer"
+        >
+          <span>🎮 2048 Game</span>
+        </button>
+      </div>
     </div>
   );
 };

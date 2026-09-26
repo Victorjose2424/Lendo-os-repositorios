@@ -29,6 +29,7 @@ import { MarkdownNotesApp } from './EmbeddedApps/MarkdownNotesApp';
 import { GenericAppSandbox } from './EmbeddedApps/GenericAppSandbox';
 import { IframeAppViewer } from './EmbeddedApps/IframeAppViewer';
 import { WebAppRunner } from './EmbeddedApps/WebAppRunner';
+import { PolsiaApp } from './EmbeddedApps/PolsiaApp';
 import { PromptEditorTab } from './PromptEditor/PromptEditorTab';
 import { RepoCopilotChat } from './RepoChat/RepoCopilotChat';
 import { TerminalLogs } from './TerminalLogs';
@@ -67,6 +68,8 @@ export const AppViewer: React.FC<AppViewerProps> = ({
 
   const renderActiveApp = () => {
     switch (repo.demoType) {
+      case 'polsia':
+        return <PolsiaApp repo={repo} key={reloadKey} />;
       case 'sparkle-box':
         return <SparkleBoxApp key={reloadKey} />;
       case 'jarvis':
@@ -87,10 +90,17 @@ export const AppViewer: React.FC<AppViewerProps> = ({
       case 'custom-iframe':
         return <IframeAppViewer url={repo.demoUrl || `http://localhost:${repo.port}`} repoName={repo.name} key={reloadKey} />;
       default: {
+        const lowerName = (repo.fullName || repo.name || '').toLowerCase();
+        if (lowerName.includes('polsia')) {
+          return <PolsiaApp repo={repo} key={reloadKey} />;
+        }
+
+        const hasCachedHtml = Boolean(repo.cachedFiles?.['index.html']?.content);
         const hasHtmlFiles =
           repo.files?.some((f) => f.path.toLowerCase().endsWith('.html')) ||
           repo.language?.toLowerCase().includes('html');
-        if (hasHtmlFiles || repo.fullName.toLowerCase().includes('renderahouse')) {
+
+        if (hasCachedHtml || hasHtmlFiles || lowerName.includes('renderahouse')) {
           return (
             <WebAppRunner
               repo={repo}
@@ -103,7 +113,20 @@ export const AppViewer: React.FC<AppViewerProps> = ({
         if (repo.demoUrl) {
           return <IframeAppViewer url={repo.demoUrl} repoName={repo.name} key={reloadKey} />;
         }
-        return <GenericAppSandbox repo={repo} onRestart={onRestart} key={reloadKey} />;
+        return (
+          <GenericAppSandbox
+            repo={repo}
+            onRestart={onRestart}
+            onSynthesizeApp={(repoId, html) => {
+              if (onUpdateFileCode) {
+                onUpdateFileCode(repoId, 'index.html', html);
+              }
+            }}
+            onOpenCopilot={() => setActiveTab('chat')}
+            onOpenPromptTab={() => setActiveTab('prompt')}
+            key={reloadKey}
+          />
+        );
       }
     }
   };
